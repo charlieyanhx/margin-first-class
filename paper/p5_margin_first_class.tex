@@ -1,0 +1,269 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,booktabs,microtype,graphicx,xcolor}
+\usepackage[round]{natbib}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black,citecolor=blue!50!black]{hyperref}
+\setlength{\parskip}{0.35em}\setlength{\parindent}{0em}
+\title{\textbf{Margin Is Not a Footnote:\\ Reg-T Feasibility as a First-Class Backtest Output}}
+\author{Charlie Yan\thanks{Draft v0.3 (journal-length), August 2026. Margin figures come from
+our own Reg-T implementation, computed daily from the tape's actual positions (strikes, widths,
+credits, spot), hand-verified on sampled days against the published formulas, with two
+independent implementations agreeing to $\sim$1\%. They are \emph{our arithmetic, not the
+broker's}: validation against broker-computed requirements is pending and is flagged throughout.
+Requirements are reported as percentages of a reference net liquidation value; because
+requirements scale with position count, these ratios are scale-invariant and the normalization
+is a reference figure rather than deployed capital. Performance basis where quoted: full cross
+fills, ex-commission, marked to market daily on the full calendar, 2020-09 to 2026-05.}}
+\date{August 2026}
+\begin{document}\maketitle
+
+\begin{abstract}
+A backtest of a margined strategy that reports a Sharpe ratio without a margin path is
+incomplete in a way that can invert its conclusion. We document a short-premium index options
+book whose uncapped configuration backtests attractively on every performance statistic---and
+whose daily Reg-T requirement, reconstructed from the tape's own positions, \emph{peaks at
+151--154\% of the account's net liquidation value}. The strategy is infeasible: it breaches its
+own capital on precisely the stress day that generates its risk premium. The naked short-call
+sleeve alone peaks at 108--111\% of the whole account. Adding a far wing to that sleeve---an
+action costing roughly one-fifteenth of the equivalent put wing, because of smile
+asymmetry---halves the book's peak to 77\% and converts an infeasible strategy into a
+deployable one at approximately zero cost to expected P\&L. None of this is visible in any
+performance statistic, because margin peaks are joint events: entries cluster, holds stack, and
+per-position requirements widen simultaneously on the same stress day, so the peak-to-median
+ratio runs 6.7 to 16.1$\times$ across configurations while every performance statistic is a
+moment of a single daily series. We propose a minimum reporting standard for margined
+backtests---the dated requirement path, the peak's anatomy, an intrinsic-bound gap table on
+actual daily inventory, and return on deployed margin alongside return on capital---and we
+document three portable findings encountered in building it: a stale measurement window
+understated the true peak by half; iron-condor netting cuts the peak requirement 15\% with
+identical positions and P\&L, bounded by expiry alignment; and at small scale collateral is
+usually not the binding constraint (signal supply is), so margin optimization pays exactly at
+the scale-up where it stops being optional.
+\end{abstract}
+
+\section{The statistic nobody reports}
+Consider two strategies with identical Sharpe ratios, identical maximum drawdowns, identical
+turnover, and identical per-year P\&L. One of them can be run; the other cannot, because on a
+single day in April 2025 its collateral requirement exceeds the account that is running it. No
+statistic in the standard performance toolkit distinguishes them. That gap is this paper's
+subject.
+
+The omission is not a matter of degree. For an unlevered long-only strategy, capital
+consumption is trivially the position value, and reporting it adds nothing. For a margined
+short-option book it is a separate stochastic process, driven by different variables than P\&L,
+peaking at different times, and capable of terminating the strategy independently of its
+returns. A backtest that omits it has not modelled the strategy; it has modelled the strategy's
+profits conditional on the strategy being permitted to continue---a condition it never checked.
+
+We make three contributions. Section~\ref{sec:case} presents a worked case in which the margin
+path inverts the deployment conclusion for a book that every performance statistic approves.
+Section~\ref{sec:why} explains why performance statistics are structurally blind to this,
+through the joint-event mechanism, and quantifies the blindness. Section~\ref{sec:standard}
+proposes a reporting standard that costs a few lines of code against a position file, plus
+three findings from building it that we expect to generalize.
+
+\section{The case}\label{sec:case}
+The book comprises three sleeves of index option spreads---short put verticals, short call
+positions, and a delta-hedged relative-value sleeve---over 2020--2026, with entries clustering
+in volatility episodes and multi-day holding periods. Its backtested performance was acceptable
+on every statistic the standard toolkit produces, computed on honest fills and daily marking.
+
+Reconstructing the daily Reg-T requirement from the tape's actual positions, with two
+independent implementations agreeing to $\sim$1\% and anchored on hand-verified days:
+
+\begin{table}[h]\centering\small
+\begin{tabular}{lcccc}\toprule
+Configuration (\% of reference NLV) & Median & Mean & P90 & \textbf{Peak (date)} \\ \midrule
+Put sleeve, winged & 5.5 & 7.9 & 17.5 & 44.1\% \;(2025-04-15) \\
+Call sleeve, \textbf{naked (as designed)} & 11.2 & 15.5 & 38 & \textbf{108--111\%} \;(2025-04-09) \\
+Call sleeve, winged & 2.2 & 3.5 & 7.8 & 35.4\% \;(2025-04-08) \\
+\midrule
+\textbf{Book, naked-call configuration} & 22 & --- & --- & \textbf{151--154\%} \;(2025-04-09) \\
+\textbf{Book, winged configuration} & 11.5 & --- & --- & \textbf{76.9\%} \\
+\bottomrule\end{tabular}
+\caption{Audited daily Reg-T requirement by configuration. The naked-call book breaches its own
+account; the winged book does not.}
+\label{tab:margin}\end{table}
+\begin{figure}[h]\centering
+\includegraphics[width=\textwidth]{fig_p5_margin.pdf}
+\caption{Exhibit 1. Left: the requirement distribution by configuration, against the account's
+capital line. Right: the peak-to-median ratio---what a ``typical utilization'' figure conceals.}
+\label{fig:margin}\end{figure}
+
+The breach day is not exotic. It is the April 2025 stress episode: roughly one hundred open
+short calls near the money after a $+9.4\%$ melt-up, at a hand-verified requirement per
+contract in the five figures. The strategy's premium is compensation for precisely this kind of
+day; the margin system's response to precisely this kind of day is what makes the strategy
+impossible to hold through it. That is not a coincidence but the structure of the problem: the
+event that justifies the premium and the event that triggers the collateral call are the same
+event.
+
+One presentational recommendation follows directly. Plotting the margin path \emph{against the
+equity curve}, rather than alone, makes legible the relationship between what a strategy has
+earned to date and what it must post today---a relationship that is unfavourable early in any
+strategy's life, since requirements scale with position count from day one while cumulative
+P\&L starts at zero. We know of no performance statistic that substitutes for looking at the
+two series together.
+
+\section{Why performance statistics cannot see this}\label{sec:why}
+Margin peaks are \emph{joint} events. On the same stress day three things happen at once:
+entries have clustered, because the signal fires repeatedly in episodes; holds have stacked,
+because positions from the preceding weeks are all still open; and each position's requirement
+has widened, because strikes have moved toward the money and per-position spread widths roughly
+doubled through the episode. The margin path is therefore the product of three correlated
+stress responses, while every performance statistic---mean, volatility, Sharpe ratio, even
+maximum drawdown---is a moment or an extremum of a \emph{single} daily P\&L series. The
+information is not compressed by those statistics; it is absent from their inputs.
+
+The quantitative consequence is the peak-to-median ratio, which runs 6.7 to 16.1$\times$ across
+the configurations in Table~\ref{tab:margin} (Exhibit~1, right panel). Typical utilization is
+11.5\% of capital for the winged configuration and 22\% for the naked one (16\% median in the
+small-account variant): figures that, reported alone, are not merely incomplete but actively
+misleading, since each is roughly an order of magnitude below the number that determines
+whether the strategy can be run. Reporting the median without the peak is the collateral analogue of
+reporting a mean return without a drawdown.
+
+Three portable specifics emerged from the audit.
+
+\textbf{(a) The stale-window trap.} A previously recorded figure of ``129\% peak at production
+sizing'' turned out to be the peak of a truncated early window---election week 2020---not
+exceeded again until 2022, after which position concurrency tripled. Measured on the full
+sample, the true peak was roughly double. Margin paths must span the full sample for exactly
+the reason performance must, and for an additional one: concurrency is a slow-moving structural
+variable, so an early-window margin measurement is not merely noisy but systematically biased
+low for any strategy whose position count grew.
+
+\textbf{(b) The cheap wing.} Because of put-call smile asymmetry, the far call wing that
+converts the naked sleeve to defined risk costs roughly one-fifteenth of the equivalent put
+wing, while halving the book's peak requirement---the cheapest unit of feasibility in the book,
+at approximately zero cost to expected P\&L. This reframes what wings are for. In this book the
+put wing recovers only 22\% of worst-case blowup losses, so as insurance it is poor value; as
+collateral relief it is decisive. \emph{Wings are structure, not insurance}, and their margin
+function dominates their hedging function in the deployment decision.
+
+\textbf{(c) Netting.} Pairing put and call spreads of matching expiry into iron condors---
+identical positions, identical P\&L, since Reg-T charges the greater side rather than the
+sum---cuts the peak requirement 15\% and the median 13\%. The binding constraint is expiry
+alignment: the two sleeves choose expiries independently and coincide only 31\% of the time.
+Deliberately aligning them should push the netting rate toward its limit at near-zero strategy
+cost, a one-variable change we have not yet tested. Broker recognition of the pairing must be
+confirmed before any of this is relied upon.
+
+\section{The gap table, and why history understates it}\label{sec:gap}
+Realized drawdown history is the wrong basis for sizing a short-premium book whenever the
+sample lacks a generational stress day. Ours spans 2020-09 onward and contains neither March
+2020 nor February 2018---a fact easy to state and easy to forget when a five-year backtest
+looks long. We therefore report, alongside the margin path, an \emph{overnight gap table}: for
+every day's actual inventory, the position-level intrinsic-value bound on the overnight loss
+for gaps out to $\pm 60\%$.
+
+The construction is deliberately model-free. It asks what each open position is worth at
+expiry-equivalent intrinsic value under a hypothesised gap, sums across the actual inventory of
+that day, and takes the worst day. It requires no volatility model, no correlation assumption,
+and no distributional claim---which is what makes it a bound rather than a forecast. On the
+studied small-account configuration a $-15\%$ overnight gap bounds the loss at 49\% of the
+account on the worst inventory day, and no gap on any day in the sample reaches forced
+liquidation: a statement made possible only by the defined-risk wings, and one that no
+realized-history statistic can make. Against that bound, the realized maximum drawdown
+understates the structural tail by roughly six times.
+
+We regard the gap table as the natural companion to the margin path because the two answer the
+same question from opposite directions. The margin path asks: on the worst day the sample
+actually contained, could the strategy post collateral? The gap table asks: on a worse day the
+sample did not contain, would the strategy survive at all?
+
+\section{Return on margin versus return on capital}\label{sec:ronm}
+The book's return on margin actually deployed is roughly 111\% per year; its return on total
+capital is an order of magnitude lower. The gap is not inefficiency. The idle capital is the
+reserve that makes the peak days survivable, and its opportunity cost is properly a cost of the
+strategy, not a shortfall in its execution.
+
+Reporting both numbers prices the reserve explicitly. Reporting only return on capital hides
+the strategy's true capital intensity and makes it look worse than the trading is; reporting
+only return on deployed margin overstates scalability by pretending the reserve is free. The
+pair, together, is what a capital allocator needs, and the difference between them is the
+quantity a portfolio-margin regime or a netting improvement actually attacks.
+
+One caution against over-optimizing here. At small scale, collateral is usually \emph{not} the
+binding constraint in this book---median utilization is 16\%, and what binds is signal supply,
+roughly two entries per day. Margin optimization therefore pays at the scale-up where the peak
+becomes binding, which is exactly the point at which it stops being optional. Work on it before
+then and it is a solution without a problem; discover it after and the strategy has already
+been sized on a false premise.
+
+\section{A proposed reporting standard}\label{sec:standard}
+For any margined backtest we suggest reporting, as first-class outputs alongside performance:
+\begin{enumerate}\itemsep0.05em
+\item \textbf{The requirement path}: median, 90th percentile and peak, each dated, over the full
+sample.
+\item \textbf{The peak's anatomy}: concurrency, per-position widening, and entry clustering on
+the peak day---the three multipliers, separated.
+\item \textbf{A feasibility statement}: peak as a percentage of capital, with the margin regime
+named (Reg-T or portfolio margin) and the conclusion's sensitivity to that choice stated.
+\item \textbf{An intrinsic-bound gap table} on actual daily inventory, not a distributional
+tail estimate.
+\item \textbf{Return on deployed margin next to return on capital}, with the reserve priced.
+\item \textbf{Where infeasible, the cheapest structural remedy} and its P\&L cost---in our case,
+a wing costing approximately nothing that halved the peak.
+\end{enumerate}
+Items 1--3 require a few lines of code against the position file a backtest already produces;
+none needs broker connectivity, though broker validation is the final word and ours is pending.
+We would go further and suggest that a margined backtest reporting a Sharpe ratio without at
+least item~1 should be regarded the way a backtest without transaction costs is now regarded:
+not wrong, exactly, but not yet a result.
+
+\section{Relation to prior work}
+Margin and leverage constraints are central to modern asset pricing. \citet{fp} build the
+betting-against-beta factor on the premise that leverage constraints bind and are priced;
+\citet{bp} model the funding-liquidity spiral by which margin requirements and asset prices
+reinforce each other in stress---the macro version of the mechanism that makes our peak
+coincide with our premium event. \citet{gk} formalize collateral-constrained equilibrium; the
+margin-based asset-pricing literature that follows treats the requirement as a state variable
+rather than an afterthought.
+
+Closest to our subject, \citet{hitz} show that equity option returns carry a \emph{margin
+premium} determined by an option's contribution to dealers' overall requirements---margin as a
+priced state variable. That is the mirror of our question: they ask what margin does to
+expected returns, we ask what it does to feasibility. \citet{ss} is nearer still in spirit,
+documenting that attractive option strategies can be undone by margin calls.
+
+\textbf{What is and is not novel here.} We initially believed margin reporting to be absent
+from option-strategy backtesting; that overstates the case and we correct it. Retail and
+vendor backtest publishers routinely report capital utilization, and some size starting capital
+\emph{to} the margin peak (targeting 80--100\% maximum utilization), which is a stronger
+practice than merely reporting a median; return-on-margin alongside notional return is likewise
+established in that literature. Institutional risk systems compute requirements continuously.
+What we have not found, and what we claim, is narrower and we state it precisely: (i) a worked
+case in which the margin path \emph{inverts} a deployment conclusion that every performance
+statistic approves; (ii) the joint-event decomposition explaining why performance statistics are
+structurally blind to it, quantified as a 6.7--16.1$\times$ peak-to-median ratio; (iii) the
+intrinsic-bound gap table on actual daily inventory as a complement to realized-drawdown
+history; and (iv) the specific empirical result that smile asymmetry makes the feasibility-
+restoring wing cost roughly one-fifteenth of its put-side equivalent. Readers who already size
+to peak utilization have item (i) covered; items (ii)--(iv) we believe are new.
+
+\section{Limitations}
+Our Reg-T implementation is hand-verified against published formulas and cross-checked between
+two independent builds, but it is not yet validated against broker-computed requirements;
+house minimums, add-ons and portfolio-margin models can all bind earlier than our arithmetic
+suggests, and the direction of that error is unfavourable. The portfolio-margin figures in the
+underlying audit are intrinsic-only approximations. The case is one book, one underlying, one
+margin regime, and a sample lacking a generational stress event---the last being precisely why
+Section~\ref{sec:gap} exists. The proposed standard, however, does not depend on the case's
+particulars: any strategy whose collateral requirement is a separate stochastic process from
+its P\&L needs the requirement reported, and most margined strategies qualify.
+
+\begin{thebibliography}{99}\small
+\bibitem[Brunnermeier and Pedersen(2009)]{bp} Brunnermeier, M., Pedersen, L. (2009). Market
+liquidity and funding liquidity. \emph{Review of Financial Studies} 22(6).
+\bibitem[Frazzini and Pedersen(2014)]{fp} Frazzini, A., Pedersen, L. (2014). Betting against
+beta. \emph{Journal of Financial Economics} 111(1).
+\bibitem[Geanakoplos(2010)]{gk} Geanakoplos, J. (2010). The leverage cycle. \emph{NBER
+Macroeconomics Annual} 24(1).
+\bibitem[Hitzemann et al.(2021)]{hitz} Hitzemann, S., Hofmann, M., Uhrig-Homburg, M., Wagner,
+C. (2021). Margin requirements and equity option returns. Working paper, SSRN 2789113.
+\bibitem[Santa-Clara and Saretto(2009)]{ss} Santa-Clara, P., Saretto, A. (2009). Option
+strategies: good deals and margin calls. \emph{Journal of Financial Markets} 12(3).
+
+\end{thebibliography}
+\end{document}
