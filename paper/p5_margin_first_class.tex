@@ -217,6 +217,57 @@ We would go further and suggest that a margined backtest reporting a Sharpe rati
 least item~1 should be regarded the way a backtest without transaction costs is now regarded:
 not wrong, exactly, but not yet a result.
 
+\section{The obvious alternative, tested: volatility-conditioned sizing}\label{sec:vix}
+A reader who accepts that the naked configuration is infeasible will ask why the remedy should
+be a structural one---buying a wing---rather than a behavioural one: size down when volatility
+is high. The question deserves an answer rather than an assertion, because the behavioural fix
+is cheaper to implement and requires no premium outlay. We tested it.
+
+\textbf{The channel is real.} Requirement scales with spread width, and width is set by
+delta-selected strikes, so a volatile tape mechanically produces wider spreads. On our put
+sleeve the rank correlation between the entry day's VIX percentile (prior close, trailing
+252-day window, strictly causal) and the resulting spread width is $+0.665$, and entries in the
+top VIX quintile are $1.70\times$ wider than those in the bottom. A filter that declines
+high-volatility entries therefore has a genuine mechanism through which to cut the peak.
+
+\textbf{It is nonetheless dominated.} We swept a causal rule---skip an entry when the prior
+close's VIX sits above its trailing $q$-quantile---and measured the change in peak requirement
+against the change in Line-3 P\&L. The correct control is not a random gate but \emph{uniform
+de-sizing}, which scales requirement and P\&L by the same factor and therefore traces the line
+$\Delta\text{peak} = \Delta\text{P\&L}$ exactly. Any lever worth having must sit above it.
+
+\begin{table}[h]\centering\small
+\begin{tabular}{lccc}\toprule
+Skip entries above & $\Delta$ peak requirement & $\Delta$ P\&L & versus uniform de-sizing \\ \midrule
+60th percentile & $-60.8\%$ & $-73.0\%$ & $-12.2$ pp worse \\
+70th percentile & $-55.5\%$ & $-65.4\%$ & $-10.0$ pp worse \\
+80th percentile & $-17.6\%$ & $-52.4\%$ & $-34.8$ pp worse \\
+90th percentile & $-10.1\%$ & $-30.6\%$ & $-20.4$ pp worse \\
+\bottomrule\end{tabular}
+\caption{Volatility-conditioned sizing against the size-matched control. At every threshold,
+shrinking every position uniformly to the same peak requirement retains more P\&L than
+filtering on volatility does.}
+\label{tab:vix}\end{table}
+
+\textbf{Why: it is one mechanism, not two.} High-volatility entries are wider \emph{and} carry
+the richest premium---the variance premium is concentrated exactly where the collateral is.
+Declining them sheds requirement and P\&L together, and P\&L marginally faster. The
+volatility signal is not identifying dispensable margin; it is identifying the book's best
+trades, which happen to be its most expensive to carry.
+
+\textbf{A methodological aside worth more than the result.} Our first control was a
+duty-matched random gate---skip the same \emph{number} of entries at random---which the rule
+passes at the two lower thresholds. That null is too weak here. When a lever's cost and its
+benefit are both proportional to position size, a count-matched control cannot discriminate,
+because it holds the wrong quantity fixed. The size-matched control reverses the verdict at
+every threshold. We report this because the count-matched gate is the more familiar null, and
+in this class of problem it will pass rules that do nothing.
+
+The practical implication returns us to the wing. The structural fix is not merely \emph{a}
+remedy for infeasibility; on this book it beats the obvious behavioural alternative, and it
+does so because it removes the tail of the requirement distribution without touching the
+entries that generate the return.
+
 \section{Relation to prior work}
 Margin and leverage constraints are central to modern asset pricing. \citet{fp} build the
 betting-against-beta factor on the premise that leverage constraints bind and are priced;
@@ -241,7 +292,8 @@ see it (the joint-event decomposition, peak-to-median 6.7--16.1$\times$), a conc
 standard, an intrinsic-bound gap table as an alternative to realized-drawdown history, and one
 specific empirical finding we have not seen elsewhere---that smile asymmetry makes the
 feasibility-restoring wing cost roughly one-fifteenth of its put-side equivalent while halving
-the book's peak requirement. A reader who knows \citet{ss} should read this paper as an
+the book's peak requirement---and the test in \S\ref{sec:vix} showing that the structural fix
+dominates the obvious behavioural one, volatility-conditioned sizing, at every threshold. A reader who knows \citet{ss} should read this paper as an
 implementation note on their result, not as an independent discovery.
 
 \textbf{What is and is not novel here.} We initially believed margin reporting to be absent
