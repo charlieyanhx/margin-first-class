@@ -176,8 +176,9 @@ actually contained, could the strategy post collateral? The gap table asks: on a
 sample did not contain, would the strategy survive at all?
 
 \section{Return on margin versus return on capital}\label{sec:ronm}
-The book's return on margin actually deployed is roughly 111\% per year; its return on total
-capital is an order of magnitude lower. The gap is not inefficiency. The idle capital is the
+The book's return on margin actually deployed is roughly 111\% per year. Its return on total
+capital is lower by exactly the reciprocal of utilisation---about six-fold at the 16\% median of
+the small-account variant, placing it near 18\% per year. The gap is not inefficiency. The idle capital is the
 reserve that makes the peak days survivable, and its opportunity cost is properly a cost of the
 strategy, not a shortfall in its execution.
 
@@ -188,7 +189,8 @@ pair, together, is what a capital allocator needs, and the difference between th
 quantity a portfolio-margin regime or a netting improvement actually attacks.
 
 One caution against over-optimizing here. At small scale, collateral is usually \emph{not} the
-binding constraint in this book---median utilization is 16\%, and what binds is signal supply,
+binding constraint in this book---median utilization is 16\% in the small-account variant, and
+what binds is signal supply,
 roughly two entries per day. Margin optimization therefore pays at the scale-up where the peak
 becomes binding, which is exactly the point at which it stops being optional. Work on it before
 then and it is a solution without a problem; discover it after and the strategy has already
