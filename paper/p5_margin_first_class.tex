@@ -19,8 +19,10 @@ Code, pre-registration documents and a data-availability statement: \url{https:/
 \begin{document}\maketitle
 
 \begin{abstract}
-A backtest of a margined strategy that reports a Sharpe ratio without a margin path is
-incomplete in a way that can invert its conclusion. We document a short-premium index options
+\citet{ss} showed that accounting for margin calls can turn the Sharpe ratio of an attractive
+short-option strategy negative. This paper is an implementation note on that result: a backtest of
+a margined strategy that reports a Sharpe ratio without a margin path is incomplete in a way that
+can invert its conclusion, and we show what reporting it takes. We document a short-premium index options
 book whose uncapped configuration backtests attractively on every performance statistic---and
 whose daily Reg-T requirement, reconstructed from the tape's own positions, \emph{peaks at
 151--154\% of the account's net liquidation value}. The strategy is infeasible: it breaches its
@@ -225,8 +227,20 @@ rather than an afterthought.
 Closest to our subject, \citet{hitz} show that equity option returns carry a \emph{margin
 premium} determined by an option's contribution to dealers' overall requirements---margin as a
 priced state variable. That is the mirror of our question: they ask what margin does to
-expected returns, we ask what it does to feasibility. \citet{ss} is nearer still in spirit,
-documenting that attractive option strategies can be undone by margin calls.
+expected returns, we ask what it does to feasibility. \textbf{The closest antecedent, and it is very close.} \citet{ss} document short option
+strategies with very high Sharpe ratios and then show that \emph{accounting for margin calls
+turns the Sharpe ratio of some of the best strategies negative}, because margin requirements
+force liquidation precisely during sharp market declines. That is this paper's thesis, published
+seventeen years earlier: both the inversion and its mechanism---that the event justifying the
+premium and the event triggering the collateral call are the same event---are theirs, not ours.
+We say so plainly rather than rediscovering it. What this paper adds to their result is
+operational rather than conceptual: a quantification of \emph{why} performance statistics cannot
+see it (the joint-event decomposition, peak-to-median 6.7--16.1$\times$), a concrete reporting
+standard, an intrinsic-bound gap table as an alternative to realized-drawdown history, and one
+specific empirical finding we have not seen elsewhere---that smile asymmetry makes the
+feasibility-restoring wing cost roughly one-fifteenth of its put-side equivalent while halving
+the book's peak requirement. A reader who knows \citet{ss} should read this paper as an
+implementation note on their result, not as an independent discovery.
 
 \textbf{What is and is not novel here.} We initially believed margin reporting to be absent
 from option-strategy backtesting; that overstates the case and we correct it. Retail and
