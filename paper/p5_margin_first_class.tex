@@ -8,7 +8,12 @@
 \author{Charlie Yan\thanks{Draft v0.3 (journal-length), August 2026. Margin figures come from
 our own Reg-T implementation, computed daily from the tape's actual positions (strikes, widths,
 credits, spot), hand-verified on sampled days against the published formulas, with two
-independent implementations agreeing to $\sim$1\%. They are \emph{our arithmetic, not the
+independent implementations agreeing to $\sim$1\%. Headline figures quoted as ranges
+(108--111\%, 151--154\%) reflect a $\pm 2\%$ input band on the naked-call premium term of the
+Reg-T formula---the premium was not recorded in that tape and is estimated---not disagreement
+between the implementations. Reg-T requirements for short options are the same at initiation
+and at maintenance, so the feasibility question does not turn on that distinction, though house
+maintenance minimums can bind earlier. They are \emph{our arithmetic, not the
 broker's}: validation against broker-computed requirements is pending and is flagged throughout.
 Requirements are reported as percentages of a reference net liquidation value; because
 requirements scale with position count, these ratios are scale-invariant and the normalization
@@ -25,10 +30,22 @@ a margined strategy that reports a Sharpe ratio without a margin path is incompl
 can invert its conclusion, and we show what reporting it takes. We document a short-premium index options
 book whose uncapped configuration backtests attractively on every performance statistic---and
 whose daily Reg-T requirement, reconstructed from the tape's own positions, \emph{peaks at
-151--154\% of the account's net liquidation value}. The strategy is infeasible: it breaches its
-own capital on precisely the stress day that generates its risk premium. The naked short-call
+151--154\% of the reference capital}. At constant capitalization---profits swept, the standard
+basis on which a strategy is evaluated---the strategy is infeasible: it breaches its capital on
+precisely the stress day that generates its risk premium. We then run the Santa-Clara--Saretto
+computation itself---the return path under forced de-levering whenever the requirement exceeds
+equity---and report a refinement of their result that surprised us: with profits \emph{retained},
+the historical path squeaks through, because retained earnings grow just faster than the
+requirement path (peak utilization 96.4\% on the breach day, 98.9\% on the tightest day), and
+the margin-adjusted Sharpe equals the unadjusted one at reference capital. The inversion has a
+threshold: it requires the requirement peak to reach a multiple of capital (Santa-Clara and
+Saretto's inverted strategies ran many multiples; ours peaks at $1.5\times$), and below that
+threshold margin risk manifests not as forced liquidation but as \emph{fragility}---a 1--4\%
+headroom thinner than our calculator's own $\pm 2$-point input uncertainty and thinner than
+typical broker house add-ons. The naked short-call
 sleeve alone peaks at 108--111\% of the whole account. Adding a far wing to that sleeve---an
-action costing roughly one-fifteenth of the equivalent put wing, because of smile
+action costing roughly one-fifteenth of the equivalent put wing as a share of its sleeve's
+entry premium, because of smile
 asymmetry---halves the book's peak to 77\% and converts an infeasible strategy into a
 deployable one at approximately zero cost to expected P\&L. None of this is visible in any
 performance statistic, because margin peaks are joint events: entries cluster, holds stack, and
@@ -38,16 +55,17 @@ moment of a single daily series. We propose a minimum reporting standard for mar
 backtests---the dated requirement path, the peak's anatomy, an intrinsic-bound gap table on
 actual daily inventory, and return on deployed margin alongside return on capital---and we
 document three portable findings encountered in building it: a stale measurement window
-understated the true peak by half; iron-condor netting cuts the peak requirement 15\% with
+understated the true peak two-and-a-half-fold; iron-condor netting cuts the peak requirement 15\% with
 identical positions and P\&L, bounded by expiry alignment; and at small scale collateral is
 usually not the binding constraint (signal supply is), so margin optimization pays exactly at
 the scale-up where it stops being optional.
 \end{abstract}
 
-\section{The statistic nobody reports}
+\section{The statistic performance reporting omits}
 Consider two strategies with identical Sharpe ratios, identical maximum drawdowns, identical
 turnover, and identical per-year P\&L. One of them can be run; the other cannot, because on a
-single day in April 2025 its collateral requirement exceeds the account that is running it. No
+single day in April 2025 its collateral requirement exceeds the capital it was evaluated
+on. No
 statistic in the standard performance toolkit distinguishes them. That gap is this paper's
 subject.
 
@@ -84,8 +102,9 @@ Call sleeve, winged & 2.2 & 3.5 & 7.8 & 35.4\% \;(2025-04-08) \\
 \textbf{Book, naked-call configuration} & 22 & --- & --- & \textbf{151--154\%} \;(2025-04-09) \\
 \textbf{Book, winged configuration} & 11.5 & --- & --- & \textbf{76.9\%} \\
 \bottomrule\end{tabular}
-\caption{Audited daily Reg-T requirement by configuration. The naked-call book breaches its own
-account; the winged book does not.}
+\caption{Audited daily Reg-T requirement by configuration, as percentages of reference capital
+(constant-capitalization basis). The naked-call book breaches reference capital; the winged
+book does not.}
 \label{tab:margin}\end{table}
 \begin{figure}[h]\centering
 \includegraphics[width=\textwidth]{fig_p5_margin.pdf}
@@ -108,6 +127,40 @@ strategy's life, since requirements scale with position count from day one while
 P\&L starts at zero. We know of no performance statistic that substitutes for looking at the
 two series together.
 
+\subsection*{The Santa-Clara--Saretto computation}
+Documenting a requirement path is not yet their result; their result is the return path under
+forced de-levering. We therefore run it: equity $=$ capital plus cumulative adjusted P\&L; when
+the requirement exceeds equity, positions scale by $f_t = \min(1, \mathrm{equity}_t /
+\mathrm{requirement}_t)$ and the next day's P\&L scales with them; $f$ recovers as equity
+recovers. (Basis: the same tapes as Table~\ref{tab:margin}, Line-3 cross ex-commission,
+maintenance $=$ the Reg-T series as built; no churn friction is charged on de-lever days, an
+omission that flatters the adjusted path only below reference capital, where such days exist.)
+
+The result did not match our expectation, and we report it as found. \textbf{With profits
+retained, the naked book survives its own margin path}: at reference capital the requirement
+never exceeds contemporaneous equity---the April 2025 peak arrives 4.6 years in, when retained
+earnings cover all but 3.6\% of it---so the margin-adjusted Sharpe \emph{equals} the unadjusted
+one, and even at 40\% of reference capital (peak $= 3.8\times$ capital) forced de-levering
+costs only 3.6\% of total P\&L and 0.03 of Sharpe, with no ruin. \textbf{With profits swept}
+(equity pinned at reference capital---the constant-capitalization basis on which the headline
+percentages above are computed), the requirement exceeds equity on eleven days across three
+episodes (May 2022, March--April 2025, March 2026; deepest $f = 0.65$), and even then the P\&L
+cost of proportional de-levering is under 1\%. The winged configuration never triggers under
+any convention or capital level tested ($\pm 10\%$).
+
+Three things follow. First, the feasibility question is a question about \emph{capitalization
+policy}: a seasoned account that retained its earnings holds the naked book through April 2025
+with 1--4\% to spare; a fresh account, or one that sweeps profits, cannot hold it at all.
+Second, the Santa-Clara--Saretto inversion has a threshold: their inverted strategies ran
+requirement peaks at many multiples of capital, ours peaks at $1.5\times$ reference, and below
+some multiple the mechanism produces near-misses rather than liquidations. Third---and this is
+the operative warning---surviving at 96--99\% utilization is not feasibility in any practical
+sense: the margin of error is thinner than this paper's own $\pm 2$-point premium-term
+uncertainty, thinner than house add-ons that brokers apply exactly on such days, and it
+assumes flawless posting on the worst day of the sample. The wing converts a 96--99\%-utilization
+near-miss into 20-plus points of headroom at approximately zero P\&L cost; that, not a
+Sharpe-ratio comparison, is what it buys.
+
 \section{Why performance statistics cannot see this}\label{sec:why}
 Margin peaks are \emph{joint} events. On the same stress day three things happen at once:
 entries have clustered, because the signal fires repeatedly in episodes; holds have stacked,
@@ -122,23 +175,29 @@ The quantitative consequence is the peak-to-median ratio, which runs 6.7 to 16.1
 the configurations in Table~\ref{tab:margin} (Exhibit~1, right panel). Typical utilization is
 11.5\% of capital for the winged configuration and 22\% for the naked one (16\% median in the
 small-account variant): figures that, reported alone, are not merely incomplete but actively
-misleading, since each is roughly an order of magnitude below the number that determines
+misleading, since each is roughly a seventh of the number that determines
 whether the strategy can be run. Reporting the median without the peak is the collateral analogue of
 reporting a mean return without a drawdown.
 
 Three portable specifics emerged from the audit.
 
 \textbf{(a) The stale-window trap.} A previously recorded figure of ``129\% peak at production
-sizing'' turned out to be the peak of a truncated early window---election week 2020---not
+sizing'' turned out to be the peak of a truncated early window---election week 2020---on the
+winged configuration at a $4.3\times$ production scaling, not
 exceeded again until 2022, after which position concurrency tripled. Measured on the full
-sample, the true peak was roughly double. Margin paths must span the full sample for exactly
+sample in the same normalization, the true peak of that configuration is roughly $2.5\times$
+the stale figure. (The 151--154\% headline is a different object---the naked-call book at
+reference scale---and is not directly comparable to the 129\%.) Margin paths must span the full sample for exactly
 the reason performance must, and for an additional one: concurrency is a slow-moving structural
 variable, so an early-window margin measurement is not merely noisy but systematically biased
 low for any strategy whose position count grew.
 
 \textbf{(b) The cheap wing.} Because of put-call smile asymmetry, the far call wing that
 converts the naked sleeve to defined risk costs roughly one-fifteenth of the equivalent put
-wing, while halving the book's peak requirement---the cheapest unit of feasibility in the book,
+wing \emph{as a share of each sleeve's own entry premium}---2.1\% of premium for the matched
+10-delta call wing against 31\% for the 10-delta put wing, averaged per trade over the full
+tape; in raw dollars the ratio is roughly $6\times$---while halving the book's peak
+requirement: the cheapest unit of feasibility in the book,
 at approximately zero cost to expected P\&L. This reframes what wings are for. In this book the
 put wing recovers only 22\% of worst-case blowup losses, so as insurance it is poor value; as
 collateral relief it is decisive. \emph{Wings are structure, not insurance}, and their margin
@@ -221,7 +280,9 @@ not wrong, exactly, but not yet a result.
 A reader who accepts that the naked configuration is infeasible will ask why the remedy should
 be a structural one---buying a wing---rather than a behavioural one: size down when volatility
 is high. The question deserves an answer rather than an assertion, because the behavioural fix
-is cheaper to implement and requires no premium outlay. We tested it.
+is cheaper to implement and requires no premium outlay. We tested it, pre-registered before
+running, on the full put-sleeve tape ($n = 4{,}150$ entries, 2020-09 to 2026-05); the
+computation is a checked-in script.
 
 \textbf{The channel is real.} Requirement scales with spread width, and width is set by
 delta-selected strikes, so a volatile tape mechanically produces wider spreads. On our put
@@ -251,7 +312,8 @@ filtering on volatility does.}
 
 \textbf{Why: it is one mechanism, not two.} High-volatility entries are wider \emph{and} carry
 the richest premium---the variance premium is concentrated exactly where the collateral is.
-Declining them sheds requirement and P\&L together, and P\&L marginally faster. The
+Declining them sheds requirement and P\&L together, and P\&L at least as fast---at some
+thresholds several times faster (Table~\ref{tab:vix}). The
 volatility signal is not identifying dispensable margin; it is identifying the book's best
 trades, which happen to be its most expensive to carry.
 
@@ -287,11 +349,16 @@ force liquidation precisely during sharp market declines. That is this paper's t
 seventeen years earlier: both the inversion and its mechanism---that the event justifying the
 premium and the event triggering the collateral call are the same event---are theirs, not ours.
 We say so plainly rather than rediscovering it. What this paper adds to their result is
-operational rather than conceptual: a quantification of \emph{why} performance statistics cannot
+operational rather than conceptual: their computation run on a modern retail-scale book, which
+returns a refinement---the inversion requires the requirement peak to reach a multiple of
+capital, and below that threshold the mechanism produces razor-thin near-misses rather than
+forced liquidations (\S\ref{sec:case}), so the felt risk migrates from realized de-levering to
+fragility against add-ons and posting frictions; a quantification of \emph{why} performance statistics cannot
 see it (the joint-event decomposition, peak-to-median 6.7--16.1$\times$), a concrete reporting
 standard, an intrinsic-bound gap table as an alternative to realized-drawdown history, and one
 specific empirical finding we have not seen elsewhere---that smile asymmetry makes the
-feasibility-restoring wing cost roughly one-fifteenth of its put-side equivalent while halving
+feasibility-restoring wing cost roughly one-fifteenth of its put-side equivalent per unit of
+premium (matched 10-delta wings, per-trade averages over the full tape) while halving
 the book's peak requirement---and the test in \S\ref{sec:vix} showing that the structural fix
 dominates the obvious behavioural one, volatility-conditioned sizing, at every threshold. A reader who knows \citet{ss} should read this paper as an
 implementation note on their result, not as an independent discovery.
@@ -308,14 +375,25 @@ statistic approves; (ii) the joint-event decomposition explaining why performanc
 structurally blind to it, quantified as a 6.7--16.1$\times$ peak-to-median ratio; (iii) the
 intrinsic-bound gap table on actual daily inventory as a complement to realized-drawdown
 history; and (iv) the specific empirical result that smile asymmetry makes the feasibility-
-restoring wing cost roughly one-fifteenth of its put-side equivalent. Readers who already size
-to peak utilization have item (i) covered; items (ii)--(iv) we believe are new.
+restoring wing cost roughly one-fifteenth of its put-side equivalent per unit of premium.
+Readers who already size
+to peak utilization have item (i) covered; items (ii)--(iv) we believe are new. We
+acknowledge one construction our exchange-facing readers will recognize: scenario grids on
+actual inventory are standard exchange and broker practice (SPAN's scenario scans, OCC TIMS),
+and the gap table of item (iii) is the research-stage, intrinsic-bound member of that family
+rather than an invention---its claimed novelty is its use as a first-class \emph{backtest}
+output beside the requirement path.
 
 \section{Limitations}
 Our Reg-T implementation is hand-verified against published formulas and cross-checked between
 two independent builds, but it is not yet validated against broker-computed requirements;
 house minimums, add-ons and portfolio-margin models can all bind earlier than our arithmetic
-suggests, and the direction of that error is unfavourable. The portfolio-margin figures in the
+suggests, and the direction of that error is unfavourable---doubly so now that the retained-
+earnings path survives by 1--4\%, a margin such add-ons routinely consume. The de-levering
+computation excludes the small relative-value sleeve (position-level tape unavailable; its
+recorded contribution to the book peak is under three percentage points, quantified against the
+audited anchors) and charges no liquidation churn on de-lever days, which flatters the adjusted
+path only at capital levels where such days occur. The portfolio-margin figures in the
 underlying audit are intrinsic-only approximations. The case is one book, one underlying, one
 margin regime, and a sample lacking a generational stress event---the last being precisely why
 Section~\ref{sec:gap} exists. The proposed standard, however, does not depend on the case's
